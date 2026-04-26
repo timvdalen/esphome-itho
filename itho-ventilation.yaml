@@ -252,15 +252,16 @@ cc1101:
           }
           // Remote command packets: check bytes 5-10 against command patterns
           // Based on IthoCC1101::checkIthoCommand() and command byte arrays
-          // Low:    0x22, 0xF1, 0x03, 0x00, 0x02, 0x04
-          // Medium: 0x22, 0xF1, 0x03, 0x00, 0x03, 0x04
-          // High:   0x22, 0xF1, 0x03, 0x00, 0x04, 0x04
-          // Timer:  0x22, 0xF3, 0x03, 0x00, 0x00, 0x0A/14/1E
+          // Low:      0x22, 0xF1, 0x03, 0x00, 0x02, 0x04
+          // Medium:   0x22, 0xF1, 0x03, 0x00, 0x03, 0x04
+          // High:     0x22, 0xF1, 0x03, 0x00, 0x04, 0x04
+          // Timer:    0x22, 0xF3, 0x03, 0x00, 0x00, 0x0A/14/1E
+          // Not home: 0x22, 0xF1, 0x03, 0x00, 0x01, 0x04
           else if (decoded_len >= 11 && decoded[5] == 0x22 && decoded[7] == 0x03) {
             // Parse allowed remote IDs from config vector (format: "XX.YY.ZZ Name")
             std::string source_name = "";
             std::string device_id = format_hex_pretty(&decoded[1], 3);
-            
+          
             for (const auto& entry : id(allowed_remotes_config)) {
               // Compare device ID (format: "XX.YY.ZZ Name")
               if (entry.substr(0, 8) == device_id) {
@@ -283,7 +284,7 @@ cc1101:
                 id(timer_tick).execute();  // Start the timer
               }
             }
-            // Low/Medium/High: byte[6]==0xF1, byte[10]==0x04
+            // Low/Medium/High/Not home: byte[6]==0xF1, byte[10]==0x04
             else if (decoded[6] == 0xF1 && decoded[10] == 0x04) {
               id(timeout) = 0;  // Disable the timer
               // Distinguish by byte[9]
@@ -293,6 +294,8 @@ cc1101:
                 command = "Medium";
               } else if (decoded[9] == 0x04) {
                 command = "High";
+              } else if (decoded[9] == 0x01) {
+                command = "Not home";
               }
             }
 
@@ -367,6 +370,14 @@ button:
     on_press:
       - script.execute:
           id: send_leave_command
+
+  - platform: template
+    name: "${device_prefix} Not home"
+    icon: "mdi:fan-off"
+    on_press:
+      - script.execute:
+          id: send_command
+          command_byte: 0x01
 
   - platform: template
     name: "${device_prefix} Low"
@@ -538,7 +549,7 @@ script:
 
           id(send_packet_data).execute(packet_data, transmit_count, retransmit_delay);
 
-  # Script to send a command (Low/Medium/High - sends 3 times)
+  # Script to send a command (Low/Medium/High/Not home - sends 3 times)
   - id: send_command
     mode: single
     parameters:
@@ -550,7 +561,8 @@ script:
           const char* command_name = 
             (command_byte == 0x02) ? "Low" :
             (command_byte == 0x03) ? "Medium" :
-            (command_byte == 0x04) ? "High" : "Unknown";
+            (command_byte == 0x04) ? "High" :
+            (command_byte == 0x01) ? "Not home" : "Unknown";
           ESP_LOGI("itho", "Sending %s command (counter=%d)", command_name, id(packet_counter));
           id(last_command).publish_state(command_name);
           id(controller_name).publish_state("${device_name}");

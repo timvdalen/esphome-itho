@@ -2,7 +2,7 @@
 
 This project monitors and controls an ITHO mechanical ventilation system using an ESP32 with CC1101 RF transceiver and ESPHome firmware. The system can receive and decode RF commands from ITHO remotes and monitor the ventilation unit's status.
 
-**Project Status:** ✅ **Fully Functional** - Pairing, command transmission (Low/Medium/High), and status monitoring are all working reliably.
+**Project Status:** ✅ **Fully Functional** - Pairing, command transmission (Not home/Low/Medium/High), and status monitoring are all working reliably.
 
 **Based on:**
 
@@ -70,10 +70,10 @@ This ensures multiple devices can coexist in Home Assistant without ID conflicts
 
 ### ✅ Fully Working
 
-- **Receive RF commands** from ITHO remote controls (Low, Medium, High, Timer)
+- **Receive RF commands** from ITHO remote controls (Not home, Low, Medium, High, Timer)
 - **Timer countdown display** - Shows remaining time when timer mode is activated (10/20/30 minutes)
 - **Remote ID whitelist** - Only accept commands from authorized remotes (security feature)
-- **Transmit commands** to control ventilation speed (Low, Medium, High) - each command is transmitted exactly 3 times with 40ms delay between transmissions
+- **Transmit commands** to control ventilation speed (Not home, Low, Medium, High) - each command is transmitted exactly 3 times with 40ms delay between transmissions
 - **Pairing support** - Register ESP32 as a remote control with Join command (3 transmissions) and Leave command (30 transmissions with 4ms delay between each, plus transmission overhead - approximately 1 second total per ITHO specification)
 - **Monitor ventilation unit status** via hardwired switch position and actual fan speed
 - **Real-time fan speed monitoring** - Displays current ventilation speed as percentage
@@ -118,14 +118,14 @@ To use the ESP32 as a remote control, you must first pair it with your ITHO vent
    - The join packet is transmitted 3 times with 40ms delay between transmissions
 
 4. **Test the pairing:**
-   - Press "Low", "Medium", or "High" buttons
+   - Press "Not home", "Low", "Medium", or "High" buttons
    - The ventilation speed should change accordingly
    - Each command is transmitted exactly 3 times to ensure reliable reception
 
 **Success indicators:**
 
 - The ventilation unit will briefly change fan speeds (usually a quick ramp up/down) to acknowledge successful pairing
-- After pairing, all speed control commands (Low/Medium/High) should work reliably
+- After pairing, all speed control commands (Not home/Low/Medium/High) should work reliably
 - The ESP32 logs will show "Sending Join command (counter=X)" followed by the encoded packet
 
 **Notes:**
@@ -139,6 +139,7 @@ To use the ESP32 as a remote control, you must first pair it with your ITHO vent
 
 Once paired, use these buttons to control your ventilation:
 
+- **Not home** - Set fan to not home speed
 - **Low** - Set fan to low speed
 - **Medium** - Set fan to medium speed  
 - **High** - Set fan to high speed
@@ -157,9 +158,9 @@ When a Timer command is received from an ITHO remote control, the system:
 2. Starts a countdown timer displayed in the "Timer" text sensor
 3. Shows remaining time in MM:SS format (e.g., "10:00", "5:30")
 4. Automatically stops and displays "Off" when the timer expires
-5. Timer is cancelled if a manual Low/Medium/High command is received
+5. Timer is cancelled if a manual Not home/Low/Medium/High command is received
 
-**Note:** Timer mode can only be activated by original ITHO remote controls that support timer functionality. The ESP32 currently only transmits Low/Medium/High commands.
+**Note:** Timer mode can only be activated by original ITHO remote controls that support timer functionality. The ESP32 currently only transmits Not home/Low/Medium/High commands.
 
 ## Remote ID Whitelist (Security)
 
@@ -226,12 +227,13 @@ Remote control commands are 63 bytes (raw) which decode to approximately 24 byte
 
 **Command byte patterns at decoded bytes 5-10:**
 
-| Command | Byte Pattern              | Notes                          |
-|---------|---------------------------|--------------------------------|
-| Low     | 22 F1 03 00 02 04         | Fixed low speed                |
-| Medium  | 22 F1 03 00 03 04         | Fixed medium speed             |
-| High    | 22 F1 03 00 04 04         | Fixed high speed               |
-| Timer   | 22 F3 03 00 00 0A/14/1E   | Timed boost (10/20/30 minutes) |
+| Command  | Byte Pattern            | Notes                          |
+|----------|-------------------------|--------------------------------|
+| Not home | 22 F1 03 00 01 04       | Not home mode                  |
+| Low      | 22 F1 03 00 02 04       | Fixed low speed                |
+| Medium   | 22 F1 03 00 03 04       | Fixed medium speed             |
+| High     | 22 F1 03 00 04 04       | Fixed high speed               |
+| Timer    | 22 F3 03 00 00 0A/14/1E | Timed boost (10/20/30 minutes) |
 
 Example decoded packet (High command):
 
@@ -313,7 +315,7 @@ The implementation uses a queued script architecture to ensure reliable command 
 
 Transmission parameters:
 
-- **Standard commands** (Low/Medium/High): 3 transmissions with 40ms delay
+- **Standard commands** (Not home/Low/Medium/High): 3 transmissions with 40ms delay
 - **Join command**: 3 transmissions with 40ms delay
 - **Leave command**: 30 transmissions with 4ms delay (approximately 1 second total)
 
@@ -350,7 +352,7 @@ The `transmit_count` parameter specifies exactly how many times to send the pack
   - `uptime` - Device uptime in seconds
   - `wifi_signal` - WiFi signal strength
 - Text Sensors:
-  - `last_command` - Last received command (Low/Medium/High/Timer)
+  - `last_command` - Last received command (Not home/Low/Medium/High/Timer)
   - `controller_name` - Source of last command (e.g., "Badkamer" or "Ventilatie unit")
   - `timer` - Timer countdown display (MM:SS format, or "Off" when inactive)
   - `unknown_message` - Debug sensor showing unrecognized ITHO packets
@@ -464,5 +466,5 @@ Then restart mosquitto: `sudo systemctl restart mosquitto`
 - **RF noise** - The receiver may pick up interference from nearby RF sources. Hardware filtering or antenna placement may help. Non-ITHO packets with RSSI < -90 dBm are silently ignored.
 - **Pairing procedure varies** - Different ITHO models have different pairing methods; consult your unit's manual for specific instructions
 - **Remote ID whitelist** - Must manually add new remote IDs to configuration and recompile firmware (device IDs are logged when unknown devices transmit)
-- **Timer transmission** - The ESP32 can only receive and display timer commands from original ITHO remotes. It cannot yet transmit timer commands (only Low/Medium/High and Join/Leave are supported).
+- **Timer transmission** - The ESP32 can only receive and display timer commands from original ITHO remotes. It cannot yet transmit timer commands (only Not home/Low/Medium/High and Join/Leave are supported).
 - **Model compatibility** - Tested with ITHO Daalderop CVE-S ECO; other models may require timing or encoding adjustments
